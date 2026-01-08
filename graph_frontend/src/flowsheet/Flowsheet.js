@@ -89,9 +89,19 @@ function scrollToRight(el) {
 export default function Flowsheet() {
   /** Flowsheet chart that matches the provided reference image (hardcoded data). */
 
+  // Match the reference sizing (40px/time column).
+  const COL_WIDTH = 40;
+
   // Keep existing data and order (older->newer left-to-right), but start viewport at the right edge.
   const timeLabels = useMemo(() => generateTimeLabels('0730', 26, 30), []);
   const { red, blue } = useMemo(() => getHardcodedSeriesData(), []);
+
+  // Ensure the inner content is always wider than the viewport to make horizontal overflow available.
+  // (At minimum: 1 extra column width beyond the number of labels).
+  const scrollContentWidth = useMemo(
+    () => Math.max((timeLabels?.length || 0) * COL_WIDTH, 12 * COL_WIDTH),
+    [timeLabels]
+  );
 
   // Two horizontally scrollable containers that must remain synchronized.
   const timeLabelsRef = useRef(null);
@@ -262,41 +272,47 @@ export default function Flowsheet() {
               <div
                 ref={timeLabelsRef}
                 onScroll={handleTimeLabelsScroll}
-                style={{
-                  overflowX: 'auto',
-                  overflowY: 'hidden',
-                  whiteSpace: 'nowrap',
-                  // keep spacing consistent with chart below
-                  paddingBottom: 6,
-                }}
+                className="flowsheet-xscroll"
                 aria-label="Time labels"
               >
-                {timeLabels.map((t, idx) => (
-                  <span
-                    // eslint-disable-next-line react/no-array-index-key
-                    key={`${t}-${idx}`}
-                    style={{
-                      display: 'inline-block',
-                      width: 46,
-                      textAlign: 'center',
-                      fontSize: 10,
-                      color: '#6b7280',
-                      userSelect: 'none',
-                    }}
-                  >
-                    {t}
-                  </span>
-                ))}
+                <div
+                  style={{
+                    width: scrollContentWidth,
+                    whiteSpace: 'nowrap',
+                    paddingBottom: 6,
+                  }}
+                >
+                  {timeLabels.map((t, idx) => (
+                    <span
+                      // eslint-disable-next-line react/no-array-index-key
+                      key={`${t}-${idx}`}
+                      style={{
+                        display: 'inline-block',
+                        width: COL_WIDTH,
+                        minWidth: COL_WIDTH,
+                        maxWidth: COL_WIDTH,
+                        textAlign: 'left',
+                        paddingLeft: 2,
+                        fontSize: 10,
+                        color: '#6b7280',
+                        userSelect: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               {/* Chart scroller (scrollable) */}
               <div
                 ref={chartContainerRef}
                 onScroll={handleChartScroll}
-                style={{ overflowX: 'auto', overflowY: 'hidden' }}
+                className="flowsheet-xscroll"
                 aria-label="Chart scroller"
               >
-                <div style={{ width: timeLabels.length * 46 }}>
+                <div style={{ width: scrollContentWidth }}>
                   <ReactECharts
                     option={option}
                     style={{ height: 180, width: '100%' }}

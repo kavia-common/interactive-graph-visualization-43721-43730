@@ -83,6 +83,27 @@
   padding: 6px 6px 0 6px;
 }
 
+/* Shared horizontal scroller used by time labels and the chart area. */
+.flowsheet-xscroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable both-edges;
+}
+
+/* Make sure scrollbars don't get hidden by parent layouts. */
+.flowsheet-xscroll::-webkit-scrollbar {
+  height: 10px;
+}
+.flowsheet-xscroll::-webkit-scrollbar-thumb {
+  background: rgba(17, 24, 39, 0.25);
+  border-radius: 999px;
+}
+.flowsheet-xscroll::-webkit-scrollbar-track {
+  background: rgba(17, 24, 39, 0.06);
+}
+
 /* Make ECharts canvas align visually like the reference */
 .flowsheet-chart-frame canvas {
   border-radius: 2px;
