@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import './Flowsheet.css';
 
@@ -69,11 +69,39 @@ function getHardcodedSeriesData() {
   return { red, blue };
 }
 
+/**
+ * Synchronize one scrollable element's horizontal scroll with the other.
+ */
+function syncScrollLeft(sourceEl, targetEl) {
+  if (!sourceEl || !targetEl) return;
+  targetEl.scrollLeft = sourceEl.scrollLeft;
+}
+
+/**
+ * Scroll an element to the rightmost end.
+ */
+function scrollToRight(el) {
+  if (!el) return;
+  el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
+}
+
 // PUBLIC_INTERFACE
 export default function Flowsheet() {
   /** Flowsheet chart that matches the provided reference image (hardcoded data). */
+
+  // Keep existing data and order (older->newer left-to-right), but start viewport at the right edge.
   const timeLabels = useMemo(() => generateTimeLabels('0730', 26, 30), []);
   const { red, blue } = useMemo(() => getHardcodedSeriesData(), []);
+
+  // Two horizontally scrollable containers that must remain synchronized.
+  const timeLabelsRef = useRef(null);
+  const chartContainerRef = useRef(null);
+
+  // Guard to avoid re-scrolling user after initial render.
+  const didInitialScrollRef = useRef(false);
+
+  // Used to trigger scroll-to-right after ECharts completes rendering.
+  const [chartRenderTick, setChartRenderTick] = useState(0);
 
   const option = useMemo(
     () => ({
@@ -161,6 +189,42 @@ export default function Flowsheet() {
     [blue, red, timeLabels]
   );
 
+  const handleTimeLabelsScroll = () => {
+    syncScrollLeft(timeLabelsRef.current, chartContainerRef.current);
+  };
+
+  const handleChartScroll = () => {
+    syncScrollLeft(chartContainerRef.current, timeLabelsRef.current);
+  };
+
+  /**
+   * Initial auto-scroll to the rightmost edge so the latest data is visible first.
+   * Uses rAF + small setTimeout for robustness because ECharts can finalize canvas size slightly later.
+   */
+  useEffect(() => {
+    if (didInitialScrollRef.current) return;
+    if (!timeLabelsRef.current || !chartContainerRef.current) return;
+    if (!timeLabels || timeLabels.length === 0) return;
+
+    const doSyncRight = () => {
+      const t = timeLabelsRef.current;
+      const c = chartContainerRef.current;
+      scrollToRight(t);
+      scrollToRight(c);
+    };
+
+    // First pass: next paint after DOM nodes exist.
+    requestAnimationFrame(() => {
+      doSyncRight();
+
+      // Second pass: after ECharts/canvas has had a moment to measure and lay out.
+      setTimeout(() => {
+        doSyncRight();
+        didInitialScrollRef.current = true;
+      }, 200);
+    });
+  }, [timeLabels, chartRenderTick]);
+
   return (
     <div className="flowsheet-page">
       <div className="flowsheet-card">
@@ -194,11 +258,57 @@ export default function Flowsheet() {
 
           <section className="flowsheet-chart" aria-label="Flowsheet chart">
             <div className="flowsheet-chart-frame">
-              <ReactECharts
-                option={option}
-                style={{ height: 180, width: '100%' }}
-                opts={{ renderer: 'canvas' }}
-              />
+              {/* Time labels row (scrollable) */}
+              <div
+                ref={timeLabelsRef}
+                onScroll={handleTimeLabelsScroll}
+                style={{
+                  overflowX: 'auto',
+                  overflowY: 'hidden',
+                  whiteSpace: 'nowrap',
+                  // keep spacing consistent with chart below
+                  paddingBottom: 6,
+                }}
+                aria-label="Time labels"
+              >
+                {timeLabels.map((t, idx) => (
+                  <span
+                    // eslint-disable-next-line react/no-array-index-key
+                    key={`${t}-${idx}`}
+                    style={{
+                      display: 'inline-block',
+                      width: 46,
+                      textAlign: 'center',
+                      fontSize: 10,
+                      color: '#6b7280',
+                      userSelect: 'none',
+                    }}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+
+              {/* Chart scroller (scrollable) */}
+              <div
+                ref={chartContainerRef}
+                onScroll={handleChartScroll}
+                style={{ overflowX: 'auto', overflowY: 'hidden' }}
+                aria-label="Chart scroller"
+              >
+                <div style={{ width: timeLabels.length * 46 }}>
+                  <ReactECharts
+                    option={option}
+                    style={{ height: 180, width: '100%' }}
+                    opts={{ renderer: 'canvas' }}
+                    lazyUpdate
+                    onEvents={{
+                      // When ECharts reports finished, trigger our "layout is ready" tick.
+                      finished: () => setChartRenderTick((v) => v + 1),
+                    }}
+                  />
+                </div>
+              </div>
             </div>
           </section>
         </div>
